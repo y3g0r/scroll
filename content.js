@@ -15,22 +15,21 @@ function main() {
     ctx.imageSmoothingQuality = "high"
     ctx.drawWindow(window, 0, 0, CANVAS_WIDTH, viewportHeight, 'rgb(255,255,255)');
     // document will be drawn starting from this y position
-    let documentOffset = viewportHeight - DEFAULT_DELTA
+    let documentOffset = viewportHeight
     // where in the viewport new content will be drawn
-    let viewportOffset = viewportHeight - DEFAULT_DELTA
+    let viewportOffset = 0
     function scroll(delta = DEFAULT_DELTA) {
         ctx.save()
         // start drawing next viewport including last pixels of current
         // if (viewportOffset % viewportHeight === 0) {
         //         documentOffset -= 30
         // }
-        let newDocumentOffset = documentOffset + delta
-        let newViewportOffset = (viewportHeight + viewportOffset + delta) % viewportHeight
-        ctx.translate(0, newViewportOffset)
-        ctx.drawWindow(window, 0, newDocumentOffset, CANVAS_WIDTH, delta, 'rgb(255,255,255)');
+        viewportOffset %= viewportHeight
+        ctx.translate(0, viewportOffset)
         ctx.fillRect(0, delta, CANVAS_WIDTH, DIVIDING_LINE_HEIGHT)
-        documentOffset = newDocumentOffset
-        viewportOffset = newViewportOffset
+        ctx.drawWindow(window, 0, documentOffset, CANVAS_WIDTH, delta, 'rgb(255,255,255)');
+        documentOffset += delta
+        viewportOffset += delta
         ctx.restore()
     }
     let intervalId = setInterval(
