@@ -8,7 +8,7 @@
         }
     },
     "background": {
-        "scripts": []
+        "scripts": ["background.js"]
     },
     "content_scripts": [
         {
@@ -28,7 +28,10 @@
         "clipboardWrite",
         "contextMenus",
         "<all_urls>",
-        "resource://pdf.js/",
         "https://screenshots.firefox.com/"
-    ]
+    ],
+    "browser_action": {
+        "default_icon": "icons/reader-32.png",
+        "default_title": "Read"
+    }
 }
