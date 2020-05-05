@@ -1,7 +1,7 @@
 (function() {
     const DIVIDING_LINE_HEIGHT = 1
     const DEFAULT_DELTA = 1
-    // these to are using constants naming conv, b/c I don't handle window resize right now
+    // these to are using constants naming conv, b/c I don't handle window resize during reading right now
     let CANVAS_WIDTH = 0
     let CANVAS_HEIGHT = 0
     // document will be drawn starting from this y position
@@ -15,7 +15,7 @@
 
     function toggleReader() {
         if (!canvas) {
-            CANVAS_WIDTH = window.innerWidth
+            CANVAS_WIDTH = document.body.clientWidth
             CANVAS_HEIGHT = window.innerHeight
             canvas = document.createElement("canvas")
             canvas.id = "mozreader"
@@ -29,11 +29,11 @@
             drawingCtx.drawWindow(window, 0, readStartYOffset, CANVAS_WIDTH, CANVAS_HEIGHT, 'rgb(255,255,255)');
             documentOffset = readStartYOffset + CANVAS_HEIGHT
             document.body.appendChild(canvas)
-            registerEventListeners(canvas)
+            registerEventListeners()
             startReading()
         } else {
             stopReading()
-            deregisterEventListeners(canvas)
+            deregisterEventListeners()
             canvas.remove()
             canvas = null
             documentOffset = 0
@@ -94,11 +94,11 @@
             }
         }
     }
-    function registerEventListeners(canvas) {
+    function registerEventListeners() {
         canvas.addEventListener("click", eventHandlerScrollPlayPause)
         document.addEventListener("wheel", eventHandlerManualScroll)
     }
-    function deregisterEventListeners(canvas) {
+    function deregisterEventListeners() {
         canvas.removeEventListener("click", eventHandlerScrollPlayPause)
         document.removeEventListener("wheel", eventHandlerManualScroll)
     }
@@ -113,8 +113,9 @@
         if (scrollDownInterval) {
             scrollDownInterval = clearInterval(scrollDownInterval)
         }
-        let pagesOffset = Math.max(Math.floor(documentOffset / CANVAS_HEIGHT) - 1, 0)
-        let jumpToY = pagesOffset * CANVAS_HEIGHT + readStartYOffset % CANVAS_HEIGHT
+        let initialScrollPageOffset = readStartYOffset % CANVAS_HEIGHT
+        let pagesOffset = Math.max(Math.floor((documentOffset - initialScrollPageOffset) / CANVAS_HEIGHT) - 1, 0)
+        let jumpToY = pagesOffset * CANVAS_HEIGHT + initialScrollPageOffset
         window.scroll({top: jumpToY, left: 0, behavior: "auto"})
     }
 
