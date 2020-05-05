@@ -15,8 +15,8 @@
 
     function toggleReader() {
         if (!canvas) {
-            CANVAS_WIDTH = document.body.clientWidth
-            CANVAS_HEIGHT = window.innerHeight
+            CANVAS_WIDTH = document.documentElement.clientWidth
+            CANVAS_HEIGHT = document.documentElement.clientHeight
             canvas = document.createElement("canvas")
             canvas.id = "mozreader"
             canvas.width = CANVAS_WIDTH
