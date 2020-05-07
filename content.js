@@ -117,7 +117,12 @@
             }
         }
     }
-    function eventHandlerKeyUp(event) {
+    function eventHandlerToggleSpeed(event) {
+        if (!scrollDownInterval) {
+            // do nothing if not scrolling
+            return
+        }
+        event.preventDefault()
         if (event.key === " ") {
             if (scrollInterval === NORMAL_SCROLL_INTERVAL) {
                 scrollInterval = SLOW_SCROLL_INTERVAL
@@ -135,12 +140,12 @@
     function registerEventListeners() {
         canvas.addEventListener("click", eventHandlerScrollPlayPause)
         document.addEventListener("wheel", eventHandlerManualScroll)
-        document.addEventListener("keyup", eventHandlerKeyUp)
+        document.addEventListener("keydown", eventHandlerToggleSpeed)
     }
     function deregisterEventListeners() {
         canvas.removeEventListener("click", eventHandlerScrollPlayPause)
         document.removeEventListener("wheel", eventHandlerManualScroll)
-        document.removeEventListener("keyup", eventHandlerKeyUp)
+        document.removeEventListener("keydown", eventHandlerToggleSpeed)
     }
     function startReading() {
         scrollDownInterval = setInterval(
