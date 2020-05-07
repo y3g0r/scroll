@@ -1,4 +1,9 @@
 (function() {
+    if (window.mozReaderRunning) {
+        return
+    }
+    window.mozReaderRunning = true
+
     const DIVIDING_LINE_HEIGHT = 1
     const DEFAULT_DELTA = 1
     const NORMAL_SCROLL_INTERVAL = 100
@@ -150,7 +155,7 @@
             scrollDown,
             scrollInterval
         )
-        window.scroll({top: canvas.offsetTop, left: 0, behavior: "auto"})
+        window.scroll({top: canvas.offsetTop, behavior: "auto"})
     }
     function stopReading() {
         if (scrollDownInterval) {
@@ -161,7 +166,7 @@
         let pagesScrolled = Math.floor((documentOffset - readStartYOffset) / CANVAS_HEIGHT) - 1
 
         let jumpToY = pagesOffset * CANVAS_HEIGHT + initialScrollPageOffset - pagesScrolled * NEXT_PAGE_DOC_SHIFT
-        window.scroll({top: jumpToY, left: 0, behavior: "auto"})
+        window.scroll({top: jumpToY, behavior: "auto"})
     }
 
     browser.runtime.onMessage.addListener((message) => {

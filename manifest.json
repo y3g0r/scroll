@@ -10,16 +10,9 @@
     "background": {
         "scripts": ["background.js"]
     },
-    "content_scripts": [
-        {
-            "matches": [
-                "<all_urls>",
-                "file:///*"
-            ],
-            "js": ["content.js"]
-        }
-    ],
     "permissions": [
+        "mozillaAddons",
+        "resource://*/*",
         "activeTab",
         "downloads",
         "tabs",
