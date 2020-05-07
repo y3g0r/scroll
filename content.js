@@ -19,10 +19,10 @@
 
     function toggleReader() {
         if (!canvas) {
-            // CANVAS_WIDTH = document.documentElement.clientWidth
-            // CANVAS_HEIGHT = document.documentElement.clientHeight
-            CANVAS_WIDTH = window.innerWidth
-            CANVAS_HEIGHT = window.innerHeight
+            CANVAS_WIDTH = document.documentElement.clientWidth
+            CANVAS_HEIGHT = document.documentElement.clientHeight
+            // CANVAS_WIDTH = window.innerWidth
+            // CANVAS_HEIGHT = window.innerHeight
             NEXT_PAGE_DOC_SHIFT = CANVAS_HEIGHT * 0.03
             canvas = document.createElement("canvas")
             canvas.id = "mozreader"
@@ -147,7 +147,7 @@
             scrollDown,
             scrollInterval
         )
-        window.scroll({top: 999999, left: 0, behavior: "auto"})
+        window.scroll({top: canvas.offsetTop, left: 0, behavior: "auto"})
     }
     function stopReading() {
         if (scrollDownInterval) {
