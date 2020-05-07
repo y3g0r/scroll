@@ -21,15 +21,13 @@
         if (!canvas) {
             CANVAS_WIDTH = document.documentElement.clientWidth
             CANVAS_HEIGHT = document.documentElement.clientHeight
-            // CANVAS_WIDTH = window.innerWidth
-            // CANVAS_HEIGHT = window.innerHeight
             NEXT_PAGE_DOC_SHIFT = CANVAS_HEIGHT * 0.03
             canvas = document.createElement("canvas")
             canvas.id = "mozreader"
             let dpr = window.devicePixelRatio || 1;
             canvas.width = CANVAS_WIDTH * dpr
             canvas.height = CANVAS_HEIGHT * dpr
-            canvas.style.widht = `${Math.floor(canvas.width / dpr)}px`
+            canvas.style.width = `${Math.floor(canvas.width / dpr)}px`
             canvas.style.height = `${Math.floor(canvas.height / dpr)}px`
             drawingCtx = canvas.getContext('2d', {alpha: false})
             drawingCtx.scale(dpr, dpr)
