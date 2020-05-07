@@ -17,32 +17,16 @@
     let readStartYOffset = 0
     let scrollInterval = NORMAL_SCROLL_INTERVAL
 
-    function setupCanvas(canvas) {
-        // Get the device pixel ratio, falling back to 1.
-        let dpr = window.devicePixelRatio || 1;
-        // Get the size of the canvas in CSS pixels.
-        let rect = canvas.getBoundingClientRect();
-        // Give the canvas pixel dimensions of their CSS
-        // size * the device pixel ratio.
-        canvas.width = rect.width * dpr;
-        canvas.height = rect.height * dpr;
-        let ctx = canvas.getContext('2d');
-        // Scale all drawing operations by the dpr, so you
-        // don't have to worry about the difference.
-        ctx.scale(dpr, dpr);
-        return ctx;
-    }
-
     function toggleReader() {
         if (!canvas) {
             // CANVAS_WIDTH = document.documentElement.clientWidth
             // CANVAS_HEIGHT = document.documentElement.clientHeight
             CANVAS_WIDTH = window.innerWidth
             CANVAS_HEIGHT = window.innerHeight
-            let dpr = window.devicePixelRatio || 1;
             NEXT_PAGE_DOC_SHIFT = CANVAS_HEIGHT * 0.03
             canvas = document.createElement("canvas")
             canvas.id = "mozreader"
+            let dpr = window.devicePixelRatio || 1;
             canvas.width = CANVAS_WIDTH * dpr
             canvas.height = CANVAS_HEIGHT * dpr
             canvas.style.widht = `${Math.floor(canvas.width / dpr)}px`
