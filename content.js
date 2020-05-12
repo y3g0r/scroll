@@ -6,8 +6,7 @@
 
     const DIVIDING_LINE_HEIGHT = 1
     const DEFAULT_DELTA = 1
-    const NORMAL_SCROLL_INTERVAL = 100
-    const SLOW_SCROLL_INTERVAL = 300
+    const NORMAL_SCROLL_INTERVAL = 80
     let NEXT_PAGE_DOC_SHIFT = 0
     // these to are using constants naming conv, b/c I don't handle window resize during reading right now
     let CANVAS_WIDTH = 0
@@ -128,7 +127,7 @@
         event.preventDefault()
         if (event.key === " ") {
             if (scrollInterval === NORMAL_SCROLL_INTERVAL) {
-                scrollInterval = SLOW_SCROLL_INTERVAL
+                scrollInterval = NORMAL_SCROLL_INTERVAL * 3
             }
             else {
                 scrollInterval = NORMAL_SCROLL_INTERVAL

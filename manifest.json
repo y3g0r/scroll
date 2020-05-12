@@ -10,6 +10,12 @@
     "background": {
         "scripts": ["background.js"]
     },
+    "content_scripts": [
+        {
+            "matches": ["<all_urls>"],
+            "js": ["content.js"]
+        }
+    ],
     "permissions": [
         "mozillaAddons",
         "resource://*/*",
@@ -26,5 +32,8 @@
     "browser_action": {
         "default_icon": "icons/reader-32.png",
         "default_title": "Read"
+    },
+    "icons": {
+        "48": "icons/reader-32.png"
     }
 }
