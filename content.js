@@ -21,6 +21,24 @@
     let readStartYOffset = 0
     let scrollInterval = NORMAL_SCROLL_INTERVAL
 
+    /* Feature detection */
+    let passiveSupported = false;
+
+    try {
+        const options = {
+            get passive() { // This function will be called when the browser
+                //   attempts to access the passive property.
+                passiveSupported = true;
+                return false;
+            }
+        };
+
+        window.addEventListener("test", null, options);
+        window.removeEventListener("test", null, options);
+    } catch(err) {
+        passiveSupported = false;
+    }
+
     function toggleReader() {
         if (!canvas) {
             CANVAS_WIDTH = document.documentElement.clientWidth
@@ -141,7 +159,8 @@
     }
     function registerEventListeners() {
         canvas.addEventListener("click", eventHandlerScrollPlayPause)
-        document.addEventListener("wheel", eventHandlerManualScroll)
+        document.addEventListener("wheel", eventHandlerManualScroll, passiveSupported
+            ? { passive: false } : false)
         document.addEventListener("keydown", eventHandlerToggleSpeed)
     }
     function deregisterEventListeners() {
