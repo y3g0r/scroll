@@ -49,12 +49,16 @@ toggleButton.addEventListener('click', async () => {
     try {
         const tabs = await browserAPI.tabs.query({ active: true, currentWindow: true });
         if (tabs[0]) {
-            await browserAPI.runtime.sendMessage({
+            const response = await browserAPI.runtime.sendMessage({
                 command: 'toggleReader',
                 tabId: tabs[0].id
             });
-            // Update status immediately
-            setTimeout(updateStatus, 100);
+
+            // Use the response to immediately update UI with the actual state
+            if (response && response.success) {
+                // Update status immediately to reflect the new state
+                updateStatus();
+            }
         }
     } catch (error) {
         console.error('Failed to toggle reader:', error);

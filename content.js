@@ -544,7 +544,9 @@
         if (message.command === "toggleReader") {
             // Handle async toggleReader
             toggleReader().then(() => {
-                sendResponse({success: true});
+                // Return the actual state after toggling
+                const isActive = canvas !== null;
+                sendResponse({success: true, isActive: isActive});
             }).catch((error) => {
                 console.error('Error toggling reader:', error);
                 sendResponse({success: false, error: error.message});

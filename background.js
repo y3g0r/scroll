@@ -34,9 +34,18 @@ async function toggleReader(tabId) {
         }
         if (tabId) {
             try {
-                await browserAPI.tabs.sendMessage(tabId, {
+                const response = await browserAPI.tabs.sendMessage(tabId, {
                     command: "toggleReader"
                 });
+                // Update the background's stored state based on the content script's response
+                if (response && response.success) {
+                    updateTabStatus(tabId, {
+                        isActive: response.isActive,
+                        isCapturing: false,
+                        captureProgress: ''
+                    });
+                }
+                return response;
             } catch (error) {
                 // If content script not loaded, inject it first
                 if (error.message && error.message.includes('Receiving end does not exist')) {
@@ -45,9 +54,18 @@ async function toggleReader(tabId) {
                     // Wait a bit for script to initialize
                     await new Promise(resolve => setTimeout(resolve, 100));
                     // Try again
-                    await browserAPI.tabs.sendMessage(tabId, {
+                    const response = await browserAPI.tabs.sendMessage(tabId, {
                         command: "toggleReader"
                     });
+                    // Update the background's stored state
+                    if (response && response.success) {
+                        updateTabStatus(tabId, {
+                            isActive: response.isActive,
+                            isCapturing: false,
+                            captureProgress: ''
+                        });
+                    }
+                    return response;
                 } else {
                     throw error;
                 }
@@ -55,6 +73,7 @@ async function toggleReader(tabId) {
         }
     } catch (error) {
         console.error('Failed to toggle reader:', error);
+        return { success: false, error: error.message };
     }
 }
 
@@ -107,8 +126,8 @@ browserAPI.runtime.onMessage.addListener((message, sender, sendResponse) => {
         return true; // Keep the message channel open for async response
     } else if (message.command === "toggleReader") {
         // Popup is requesting to toggle reader
-        toggleReader(message.tabId).then(() => {
-            sendResponse({ success: true });
+        toggleReader(message.tabId).then((response) => {
+            sendResponse(response);
         });
         return true; // Keep the message channel open for async response
     }
