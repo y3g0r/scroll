@@ -28,6 +28,7 @@
 
     // Performance optimization: cache captured screens
     let capturedScreensCache = new Map() // Map of scrollY -> Image
+    let cachedDimensions = { width: 0, height: 0 } // Dimensions used for cache
     let nextCaptureY = 0 // Next position to capture
     const CACHE_AHEAD_SCREENS = 5 // How many screens to keep cached ahead
     const CACHE_TRIGGER_SCREENS = 2 // When to trigger batch capture
@@ -190,7 +191,7 @@
         }
     }
 
-    async function toggleReader() {
+    async function toggleReader(forceRecapture = false) {
         if (!canvas) {
             CANVAS_WIDTH = Math.floor(document.documentElement.clientWidth)
             CANVAS_HEIGHT = Math.floor(document.documentElement.clientHeight)
@@ -221,62 +222,100 @@
                 windowScrollY: window.scrollY
             });
 
-            // Calculate how many screens to pre-capture
-            // Capture the entire document
-            const documentHeight = Math.max(
-                document.body.scrollHeight,
-                document.documentElement.scrollHeight
-            );
-            const maxScreensToCapture = Math.ceil((documentHeight - readStartYOffset) / CANVAS_HEIGHT);
+            // Check if we can reuse existing cache
+            // Cache is valid only if dimensions haven't changed
+            const dimensionsChanged = cachedDimensions.width !== CANVAS_WIDTH ||
+                                     cachedDimensions.height !== CANVAS_HEIGHT;
+            const canReuseCache = !forceRecapture &&
+                                 capturedScreensCache.size > 0 &&
+                                 !dimensionsChanged;
 
-            console.log('[Scroll] Pre-capturing all content...', {
-                documentHeight,
-                screensToCapture: maxScreensToCapture
-            });
+            if (dimensionsChanged && capturedScreensCache.size > 0) {
+                console.log('[Scroll] Window dimensions changed - invalidating cache', {
+                    old: cachedDimensions,
+                    new: { width: CANVAS_WIDTH, height: CANVAS_HEIGHT }
+                });
+                capturedScreensCache.clear();
+            }
 
-            // Send initial status update to background
-            browserAPI.runtime.sendMessage({
-                command: 'updateStatus',
-                isActive: true,
-                isCapturing: true,
-                captureProgress: `0/${maxScreensToCapture}`
-            });
+            if (canReuseCache) {
+                console.log('[Scroll] Reusing existing cache with', capturedScreensCache.size, 'screens');
 
-            // Capture all screens upfront
-            isBatchCapturing = true;
-            for (let i = 0; i < maxScreensToCapture; i++) {
-                const targetY = readStartYOffset + CANVAS_HEIGHT * i;
-                await captureScreen(targetY, true); // Skip individual restores
+                // Send status update - no capturing needed
+                browserAPI.runtime.sendMessage({
+                    command: 'updateStatus',
+                    isActive: true,
+                    isCapturing: false,
+                    captureProgress: ''
+                });
+            } else {
+                // Clear cache if force recapturing
+                if (forceRecapture) {
+                    console.log('[Scroll] Force recapture - clearing cache');
+                    capturedScreensCache.clear();
+                }
 
-                // Update progress via background
+                // Calculate how many screens to pre-capture
+                // Capture the entire document
+                const documentHeight = Math.max(
+                    document.body.scrollHeight,
+                    document.documentElement.scrollHeight
+                );
+                const maxScreensToCapture = Math.ceil((documentHeight - readStartYOffset) / CANVAS_HEIGHT);
+
+                console.log('[Scroll] Pre-capturing all content...', {
+                    documentHeight,
+                    screensToCapture: maxScreensToCapture
+                });
+
+                // Send initial status update to background
                 browserAPI.runtime.sendMessage({
                     command: 'updateStatus',
                     isActive: true,
                     isCapturing: true,
-                    captureProgress: `${i + 1}/${maxScreensToCapture}`
+                    captureProgress: `0/${maxScreensToCapture}`
                 });
 
-                // Log progress every 5 screens
-                if ((i + 1) % 5 === 0) {
-                    console.log(`[Scroll] Captured ${i + 1}/${maxScreensToCapture} screens`);
+                // Capture all screens upfront
+                isBatchCapturing = true;
+                for (let i = 0; i < maxScreensToCapture; i++) {
+                    const targetY = readStartYOffset + CANVAS_HEIGHT * i;
+                    await captureScreen(targetY, true); // Skip individual restores
+
+                    // Update progress via background
+                    browserAPI.runtime.sendMessage({
+                        command: 'updateStatus',
+                        isActive: true,
+                        isCapturing: true,
+                        captureProgress: `${i + 1}/${maxScreensToCapture}`
+                    });
+
+                    // Log progress every 5 screens
+                    if ((i + 1) % 5 === 0) {
+                        console.log(`[Scroll] Captured ${i + 1}/${maxScreensToCapture} screens`);
+                    }
                 }
+                isBatchCapturing = false;
+
+                // Update status: capturing complete
+                browserAPI.runtime.sendMessage({
+                    command: 'updateStatus',
+                    isActive: true,
+                    isCapturing: false,
+                    captureProgress: ''
+                });
+
+                // Restore to starting position
+                window.scrollTo({top: readStartYOffset, left: 0, behavior: 'instant'});
+
+                console.log('[Scroll] Pre-capture complete!', {
+                    screensCached: capturedScreensCache.size
+                });
+
+                // Store dimensions used for this cache
+                cachedDimensions.width = CANVAS_WIDTH;
+                cachedDimensions.height = CANVAS_HEIGHT;
             }
-            isBatchCapturing = false;
-
-            // Update status: capturing complete
-            browserAPI.runtime.sendMessage({
-                command: 'updateStatus',
-                isActive: true,
-                isCapturing: false,
-                captureProgress: ''
-            });
-
-            // Restore to starting position
-            window.scrollTo({top: readStartYOffset, left: 0, behavior: 'instant'});
-
-            console.log('[Scroll] Pre-capture complete!', {
-                screensCached: capturedScreensCache.size
-            });
 
             // Now draw initial viewport from cache
             await drawPageRegion(drawingCtx, 0, 0, CANVAS_WIDTH, CANVAS_HEIGHT, readStartYOffset);
@@ -307,8 +346,7 @@
             canvas = null
             documentOffset = 0
             canvasOffset = 0
-            // Clear cache
-            capturedScreensCache.clear()
+            // Keep cache for reuse when reactivating
             // Update status: reader deactivated
             browserAPI.runtime.sendMessage({
                 command: 'updateStatus',
@@ -551,6 +589,25 @@
                 console.error('Error toggling reader:', error);
                 sendResponse({success: false, error: error.message});
             });
+            return true; // Keep the message channel open for async response
+        } else if (message.command === "recaptureReader") {
+            // Handle async recapture - force a full recapture
+            const wasActive = canvas !== null;
+
+            (async () => {
+                if (wasActive) {
+                    // If active, deactivate first (preserves cache)
+                    await toggleReader();
+                }
+                // Then activate with force recapture
+                await toggleReader(true);
+            })().then(() => {
+                sendResponse({success: true, isActive: true});
+            }).catch((error) => {
+                console.error('Error recapturing:', error);
+                sendResponse({success: false, error: error.message});
+            });
+
             return true; // Keep the message channel open for async response
         }
     })

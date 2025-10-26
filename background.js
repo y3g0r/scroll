@@ -77,6 +77,44 @@ async function toggleReader(tabId) {
     }
 }
 
+async function recaptureReader(tabId) {
+    try {
+        if (!tabId) {
+            let tabs = await browserAPI.tabs.query({active: true, currentWindow: true});
+            if (tabs[0]) {
+                tabId = tabs[0].id;
+            }
+        }
+        if (tabId) {
+            try {
+                const response = await browserAPI.tabs.sendMessage(tabId, {
+                    command: "recaptureReader"
+                });
+                // The content script will handle updating status during recapture
+                return response;
+            } catch (error) {
+                // If content script not loaded, inject it first
+                if (error.message && error.message.includes('Receiving end does not exist')) {
+                    console.log('Content script not loaded, injecting...');
+                    await injectContentScript(tabId);
+                    // Wait a bit for script to initialize
+                    await new Promise(resolve => setTimeout(resolve, 100));
+                    // Try again
+                    const response = await browserAPI.tabs.sendMessage(tabId, {
+                        command: "recaptureReader"
+                    });
+                    return response;
+                } else {
+                    throw error;
+                }
+            }
+        }
+    } catch (error) {
+        console.error('Failed to recapture:', error);
+        return { success: false, error: error.message };
+    }
+}
+
 function updateTabStatus(tabId, status) {
     const currentStatus = tabStatus.get(tabId) || {};
     tabStatus.set(tabId, { ...currentStatus, ...status });
@@ -127,6 +165,12 @@ browserAPI.runtime.onMessage.addListener((message, sender, sendResponse) => {
     } else if (message.command === "toggleReader") {
         // Popup is requesting to toggle reader
         toggleReader(message.tabId).then((response) => {
+            sendResponse(response);
+        });
+        return true; // Keep the message channel open for async response
+    } else if (message.command === "recaptureReader") {
+        // Popup is requesting to recapture page
+        recaptureReader(message.tabId).then((response) => {
             sendResponse(response);
         });
         return true; // Keep the message channel open for async response

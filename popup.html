@@ -78,6 +78,34 @@
             background-color: #ccc;
             cursor: not-allowed;
         }
+
+        .button-secondary {
+            width: 100%;
+            padding: 10px;
+            margin-top: 10px;
+            border: 2px solid #6c757d;
+            border-radius: 5px;
+            background-color: transparent;
+            color: #6c757d;
+            font-size: 14px;
+            cursor: pointer;
+            font-weight: 500;
+        }
+
+        .button-secondary:hover {
+            background-color: #6c757d;
+            color: white;
+        }
+
+        .button-secondary:disabled {
+            border-color: #ccc;
+            color: #ccc;
+            cursor: not-allowed;
+        }
+
+        .button-secondary:disabled:hover {
+            background-color: transparent;
+        }
     </style>
 </head>
 <body>
@@ -91,6 +119,7 @@
     </div>
 
     <button id="toggleButton" class="button">Activate Reader</button>
+    <button id="recaptureButton" class="button-secondary">Recapture Page</button>
 
     <script src="popup.js"></script>
 </body>
