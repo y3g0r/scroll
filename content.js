@@ -286,6 +286,9 @@
             // Append canvas to page
             document.body.appendChild(canvas)
 
+            // Ensure canvas is visible
+            canvas.style.display = 'block'
+
             console.log('[Scroll] After canvas append:', {
                 canvasPosition: canvas.style.position,
                 canvasDisplay: canvas.style.display,
@@ -406,6 +409,9 @@
         canvasOffset += delta
         drawingCtx.restore()
 
+        // Synchronize browser scrollbar (page content is hidden behind fixed canvas)
+        window.scrollTo({top: documentOffset - CANVAS_HEIGHT, left: 0, behavior: 'instant'})
+
         // No need to check cache since everything is pre-captured
         // checkAndReplenishCache(); // Disabled - all content captured upfront
 
@@ -449,6 +455,10 @@
         await drawPageRegion(drawingCtx, 0, 0, CANVAS_WIDTH, Math.abs(delta), sourceY);
 
         drawingCtx.restore()
+
+        // Synchronize browser scrollbar (page content is hidden behind fixed canvas)
+        window.scrollTo({top: documentOffset - CANVAS_HEIGHT, left: 0, behavior: 'instant'})
+
         if (carryover < 0) {
             await scrollUp(carryover)
         }
