@@ -174,6 +174,24 @@ browserAPI.runtime.onMessage.addListener((message, sender, sendResponse) => {
             sendResponse(response);
         });
         return true; // Keep the message channel open for async response
+    } else if (message.command === "setScrollSpeed") {
+        // Popup is requesting to change scroll speed
+        const tabId = message.tabId;
+        if (tabId) {
+            browserAPI.tabs.sendMessage(tabId, {
+                command: "setScrollSpeed",
+                timePerScreen: message.timePerScreen
+            }).then((response) => {
+                sendResponse(response || { success: true });
+            }).catch((error) => {
+                console.error('Failed to set scroll speed:', error);
+                sendResponse({ success: false, error: error.message });
+            });
+            return true; // Keep the message channel open for async response
+        } else {
+            sendResponse({ success: false, error: 'No tab ID provided' });
+            return false;
+        }
     }
 });
 

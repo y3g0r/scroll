@@ -24,8 +24,31 @@
     let readStartYOffset = 0
     let initialUserScrollY = 0  // User's scroll position when extension was activated
     let scrollInterval = NORMAL_SCROLL_INTERVAL
+    let timePerScreen = 30 // Default: 30 seconds per screen
+    let speedMultiplier = 1 // 1 = normal speed, 3 = slow speed (for space key toggle)
     let isCapturing = false // Prevent concurrent captures
     let isBatchCapturing = false // Batch capture in progress
+
+    // Convert time-per-screen to scroll interval based on screen height
+    function calculateScrollInterval() {
+        const screenHeight = CANVAS_HEIGHT || window.innerHeight || 800;
+        // timePerScreen is in seconds, scrollInterval is in ms
+        // We scroll 1 pixel (DEFAULT_DELTA) per interval
+        // So: screenHeight pixels / (timePerScreen * 1000 ms) = pixels per ms
+        // Therefore: scrollInterval = (timePerScreen * 1000) / screenHeight
+        // Apply speed multiplier for temporary speed changes (space key)
+        return Math.max(10, Math.floor((timePerScreen * speedMultiplier * 1000) / screenHeight));
+    }
+
+    // Load saved scroll speed from storage
+    browserAPI.storage.sync.get(['timePerScreen']).then((result) => {
+        if (result.timePerScreen) {
+            timePerScreen = result.timePerScreen;
+            scrollInterval = calculateScrollInterval();
+        }
+    }).catch((error) => {
+        console.error('Failed to load scroll speed:', error);
+    });
 
     // Performance optimization: cache captured screens
     let capturedScreensCache = new Map() // Map of scrollY -> Image
@@ -543,12 +566,9 @@
         }
         event.preventDefault()
         if (event.key === " ") {
-            if (scrollInterval === NORMAL_SCROLL_INTERVAL) {
-                scrollInterval = NORMAL_SCROLL_INTERVAL * 3
-            }
-            else {
-                scrollInterval = NORMAL_SCROLL_INTERVAL
-            }
+            // Toggle between normal and 3x slower
+            speedMultiplier = (speedMultiplier === 1) ? 3 : 1;
+            scrollInterval = calculateScrollInterval();
         }
         clearInterval(scrollDownInterval)
         scrollDownInterval = setInterval(
@@ -617,6 +637,22 @@
             });
 
             return true; // Keep the message channel open for async response
+        } else if (message.command === "setScrollSpeed") {
+            // Update scroll speed based on time-per-screen
+            if (message.timePerScreen) {
+                timePerScreen = message.timePerScreen;
+                speedMultiplier = 1; // Reset to normal speed when user adjusts
+                scrollInterval = calculateScrollInterval();
+
+                // If scrolling is active, restart the interval with new speed
+                if (scrollDownInterval !== null) {
+                    clearInterval(scrollDownInterval);
+                    scrollDownInterval = setInterval(scrollDown, scrollInterval);
+                }
+            }
+
+            sendResponse({success: true});
+            return true;
         }
     })
 
