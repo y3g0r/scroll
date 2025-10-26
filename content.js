@@ -22,6 +22,7 @@
     let canvas = null
     let drawingCtx = null
     let readStartYOffset = 0
+    let initialUserScrollY = 0  // User's scroll position when extension was activated
     let scrollInterval = NORMAL_SCROLL_INTERVAL
     let isCapturing = false // Prevent concurrent captures
     let isBatchCapturing = false // Batch capture in progress
@@ -214,10 +215,15 @@
 
             drawingCtx = canvas.getContext('2d', {alpha: false})
             drawingCtx.scale(dpr, dpr)
-            readStartYOffset = window.scrollY
+
+            // Save user's current position for initial viewing
+            initialUserScrollY = window.scrollY
+            // Always capture entire document from top
+            readStartYOffset = 0
 
             console.log('[Scroll] Initial state:', {
                 readStartYOffset,
+                initialUserScrollY,
                 CANVAS_HEIGHT,
                 windowScrollY: window.scrollY
             });
@@ -305,8 +311,8 @@
                     captureProgress: ''
                 });
 
-                // Restore to starting position
-                window.scrollTo({top: readStartYOffset, left: 0, behavior: 'instant'});
+                // Restore to user's initial position
+                window.scrollTo({top: initialUserScrollY, left: 0, behavior: 'instant'});
 
                 console.log('[Scroll] Pre-capture complete!', {
                     screensCached: capturedScreensCache.size
@@ -317,10 +323,10 @@
                 cachedDimensions.height = CANVAS_HEIGHT;
             }
 
-            // Now draw initial viewport from cache
-            await drawPageRegion(drawingCtx, 0, 0, CANVAS_WIDTH, CANVAS_HEIGHT, readStartYOffset);
+            // Now draw initial viewport from cache starting at user's position
+            await drawPageRegion(drawingCtx, 0, 0, CANVAS_WIDTH, CANVAS_HEIGHT, initialUserScrollY);
 
-            documentOffset = readStartYOffset + CANVAS_HEIGHT
+            documentOffset = initialUserScrollY + CANVAS_HEIGHT
 
             // Append canvas to page
             document.body.appendChild(canvas)
@@ -334,7 +340,8 @@
                 canvasZIndex: canvas.style.zIndex,
                 documentOffset,
                 windowScrollY: window.scrollY,
-                readStartYOffset
+                readStartYOffset,
+                initialUserScrollY
             });
 
             registerEventListeners()
@@ -428,7 +435,7 @@
         drawingCtx.translate(0, canvasOffset)
 
         // Calculate how many COMPLETE pages we've finished
-        let pagesCompleted = Math.max(0, Math.floor((documentOffset - readStartYOffset - CANVAS_HEIGHT) / CANVAS_HEIGHT) + 1);
+        let pagesCompleted = Math.max(0, Math.floor((documentOffset - initialUserScrollY - CANVAS_HEIGHT) / CANVAS_HEIGHT) + 1);
 
         // Apply overlap ONLY if we've completed at least one page
         const sourceY = pagesCompleted > 0
@@ -480,7 +487,7 @@
         drawingCtx.translate(0, DIVIDING_LINE_HEIGHT)
 
         // Calculate pages completed for overlap (same logic as scrollDown)
-        let pagesCompleted = Math.max(0, Math.floor((documentOffset - readStartYOffset - CANVAS_HEIGHT) / CANVAS_HEIGHT));
+        let pagesCompleted = Math.max(0, Math.floor((documentOffset - initialUserScrollY - CANVAS_HEIGHT) / CANVAS_HEIGHT));
 
         // Draw previous content - draw abs(delta) pixels, not abs(delta)-1
         // This ensures we fully cover any old dividing lines from previous scrollDown operations
@@ -571,9 +578,9 @@
         if (scrollDownInterval) {
             scrollDownInterval = clearInterval(scrollDownInterval)
         }
-        let initialScrollPageOffset = readStartYOffset % CANVAS_HEIGHT
+        let initialScrollPageOffset = initialUserScrollY % CANVAS_HEIGHT
         let pagesOffset = Math.max(Math.floor((documentOffset - initialScrollPageOffset) / CANVAS_HEIGHT) - 1, 0)
-        let pagesScrolled = Math.floor((documentOffset - readStartYOffset) / CANVAS_HEIGHT) - 1
+        let pagesScrolled = Math.floor((documentOffset - initialUserScrollY) / CANVAS_HEIGHT) - 1
 
         let jumpToY = pagesOffset * CANVAS_HEIGHT + initialScrollPageOffset - pagesScrolled * NEXT_PAGE_DOC_SHIFT
         window.scroll({top: jumpToY, behavior: "auto"})
