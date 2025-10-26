@@ -17,13 +17,13 @@ An automatic scrolling reader extension for comfortable reading of long web page
 
 ### Firefox
 - **Rendering**: Uses `browser.tabs.captureVisibleTab()` API
-- **Manifest**: Manifest V3 compatible with `background.scripts`
-- **Status**: ✅ Fully supported
+- **Status**: ✅ Fully supported (Firefox 109+)
 
 ### Chrome/Chromium-based browsers
 - **Rendering**: Uses `chrome.tabs.captureVisibleTab()` API
-- **Manifest**: Manifest V3 compatible with `service_worker`
 - **Status**: ✅ Fully supported
+
+**Note**: A single unified manifest.json now works for both Firefox and Chrome-based browsers.
 
 ## Installation
 
@@ -37,30 +37,16 @@ An automatic scrolling reader extension for comfortable reading of long web page
 
 ### Chrome/Edge/Brave/Opera
 
-**Important:** Chrome-based browsers require a different manifest file.
-
-1. **Rename manifest files**:
-   ```bash
-   mv manifest.json manifest-firefox.json
-   mv manifest-chrome.json manifest.json
-   ```
-
-2. Open your browser and navigate to:
+1. Open your browser and navigate to:
    - Chrome: `chrome://extensions/`
    - Edge: `edge://extensions/`
    - Brave: `brave://extensions/`
    - Opera: `opera://extensions/`
 
-3. Enable "Developer mode" (toggle in top-right corner)
-4. Click "Load unpacked"
-5. Select the extension folder
-6. The Scroll icon should appear in your toolbar
-
-**Note:** To switch back to Firefox, reverse the manifest rename:
-```bash
-mv manifest.json manifest-chrome.json
-mv manifest-firefox.json manifest.json
-```
+2. Enable "Developer mode" (toggle in top-right corner)
+3. Click "Load unpacked"
+4. Select the extension folder
+5. The Scroll icon should appear in your toolbar
 
 ## Usage
 
@@ -116,11 +102,7 @@ The extension consists of three main components:
 
 ### Cross-Browser Support
 
-Scroll works on both Firefox and Chrome-based browsers using Manifest V3. The extension uses browser-native screenshot APIs and requires no external dependencies or libraries.
-
-### Why Two Manifest Files?
-
-Different browsers implement Manifest V3 differently - Firefox uses event-driven background scripts while Chrome-based browsers use service workers. The extension code itself is fully cross-browser compatible; only the manifest configuration differs.
+Scroll works on both Firefox and Chrome-based browsers using a unified Manifest V3 configuration. The extension uses browser-native screenshot APIs and requires no external dependencies or libraries. Chrome ignores Firefox-specific settings (like `browser_specific_settings`), while modern Firefox (109+) now supports the same `service_worker` background script format as Chrome, allowing us to use a single manifest.json for both browsers.
 
 ## License
 
