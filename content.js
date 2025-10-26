@@ -512,20 +512,21 @@
         }
     }
     function eventHandlerManualScroll(event) {
-        if (event.target === canvas) {
-            event.preventDefault()
-            // console.log(event.deltaY)
+        // Always prevent default to keep scrolling within canvas
+        // This event listener is only active when canvas is visible
+        event.preventDefault()
+        event.stopPropagation()
+        // console.log(event.deltaY)
 
-            if (event.deltaY > 0) {
-                scrollDown(event.deltaY) // Async but we don't need to wait
-            } else {
+        if (event.deltaY > 0) {
+            scrollDown(event.deltaY) // Async but we don't need to wait
+        } else {
 
-                if ((Math.abs(event.deltaY) > 3)
-                    && scrollDownInterval) {
-                    scrollDownInterval = clearInterval(scrollDownInterval)
-                }
-                scrollUp(event.deltaY) // Async but we don't need to wait
+            if ((Math.abs(event.deltaY) > 3)
+                && scrollDownInterval) {
+                scrollDownInterval = clearInterval(scrollDownInterval)
             }
+            scrollUp(event.deltaY) // Async but we don't need to wait
         }
     }
     function eventHandlerToggleSpeed(event) {
