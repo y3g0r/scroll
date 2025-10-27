@@ -5,7 +5,8 @@
     "description": "An automatic scrolling reader for comfortable reading of long web pages",
     "browser_specific_settings": {
         "gecko": {
-            "id": "scroll@example.com"
+            "id": "scroll@example.com",
+            "data_collection_permissions": false
         }
     },
     "background": {
