@@ -18,28 +18,43 @@ async function updateStatus() {
 
             if (status.isCapturing) {
                 statusDiv.classList.add('capturing');
-                statusDiv.innerHTML = `
-                    <div class="status-text">Capturing content...</div>
-                    <div class="progress-text">${status.captureProgress || 'Please wait...'}</div>
-                `;
+                statusDiv.replaceChildren();
+                const statusText = document.createElement('div');
+                statusText.className = 'status-text';
+                statusText.textContent = 'Capturing content...';
+                const progressText = document.createElement('div');
+                progressText.className = 'progress-text';
+                progressText.textContent = status.captureProgress || 'Please wait...';
+                statusDiv.appendChild(statusText);
+                statusDiv.appendChild(progressText);
                 toggleButton.disabled = true;
                 toggleButton.textContent = 'Capturing...';
                 recaptureButton.disabled = true;
             } else if (status.isActive) {
                 statusDiv.classList.add('reading');
-                statusDiv.innerHTML = `
-                    <div class="status-text">Reader Active</div>
-                    <div class="progress-text">Reading in progress</div>
-                `;
+                statusDiv.replaceChildren();
+                const statusText = document.createElement('div');
+                statusText.className = 'status-text';
+                statusText.textContent = 'Reader Active';
+                const progressText = document.createElement('div');
+                progressText.className = 'progress-text';
+                progressText.textContent = 'Reading in progress';
+                statusDiv.appendChild(statusText);
+                statusDiv.appendChild(progressText);
                 toggleButton.disabled = false;
                 toggleButton.textContent = 'Deactivate Reader';
                 recaptureButton.disabled = false;
             } else {
                 statusDiv.classList.add('ready');
-                statusDiv.innerHTML = `
-                    <div class="status-text">Ready</div>
-                    <div class="progress-text">Click the button below to activate</div>
-                `;
+                statusDiv.replaceChildren();
+                const statusText = document.createElement('div');
+                statusText.className = 'status-text';
+                statusText.textContent = 'Ready';
+                const progressText = document.createElement('div');
+                progressText.className = 'progress-text';
+                progressText.textContent = 'Click the button below to activate';
+                statusDiv.appendChild(statusText);
+                statusDiv.appendChild(progressText);
                 toggleButton.disabled = false;
                 toggleButton.textContent = 'Activate Reader';
                 recaptureButton.disabled = false;
