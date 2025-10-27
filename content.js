@@ -75,6 +75,23 @@
         passiveSupported = false;
     }
 
+    /* Touch support for mobile devices */
+    let touchStartY = 0;
+    let touchStartX = 0;
+    let touchStartTime = 0;
+    let lastTouchY = 0;
+    let lastTouchTime = 0;
+    let touchVelocity = 0; // pixels per millisecond
+    let wasPausedByTouch = false; // Track if we paused due to touch-and-hold
+    let hasMovedSignificantly = false; // Track if touch has moved enough to be a drag
+    const TAP_THRESHOLD_MS = 200; // Max duration for a tap
+    const MOVEMENT_THRESHOLD = 10; // Min pixels to consider it a drag
+    const SIGNIFICANT_UP_SCROLL = 3; // Threshold for pausing auto-scroll on up gesture
+    // Momentum calculation parameters
+    // Momentum is the "coasting" effect after finger lifts - based only on final velocity
+    const MOMENTUM_BASE_MULTIPLIER = 150; // Base multiplier for velocity
+    const MOMENTUM_VELOCITY_POWER = 1.8; // Non-linear scaling (fast flicks scroll much further)
+
     /**
      * Capture a full viewport screenshot and cache it with retry logic
      */
@@ -220,6 +237,8 @@
             CANVAS_WIDTH = Math.floor(document.documentElement.clientWidth)
             CANVAS_HEIGHT = Math.floor(document.documentElement.clientHeight)
             NEXT_PAGE_DOC_SHIFT = CANVAS_HEIGHT * 0.03
+            // Recalculate scroll interval now that we know the actual canvas height
+            scrollInterval = calculateScrollInterval()
             canvas = document.createElement("canvas")
             canvas.id = "scroll"
             let dpr = window.devicePixelRatio || 1;
@@ -467,11 +486,13 @@
 
         console.log('[Scroll] scrollDown:', {delta, documentOffset, pagesCompleted, sourceY});
 
-        // Draw page content first (at position 0, for 'delta' pixels)
-        await drawPageRegion(drawingCtx, 0, 0, CANVAS_WIDTH, delta, sourceY);
+        // Draw page content with extra buffer to overlap and cover old dividing lines
+        const overlapBuffer = DIVIDING_LINE_HEIGHT;
+        await drawPageRegion(drawingCtx, 0, -overlapBuffer, CANVAS_WIDTH, delta + overlapBuffer, sourceY - overlapBuffer);
 
         // Draw dividing line AFTER the content (at position delta)
-        drawingCtx.fillRect(0, delta, CANVAS_WIDTH, DIVIDING_LINE_HEIGHT)
+        drawingCtx.fillStyle = '#000000';
+        drawingCtx.fillRect(0, delta, CANVAS_WIDTH, DIVIDING_LINE_HEIGHT);
 
         documentOffset += delta
         canvasOffset += delta
@@ -504,23 +525,24 @@
         drawingCtx.translate(0, canvasOffset)
 
         // Draw dividing line first
-        drawingCtx.fillRect(0, 0, CANVAS_WIDTH, DIVIDING_LINE_HEIGHT)
+        drawingCtx.fillStyle = '#000000';
+        drawingCtx.fillRect(0, 0, CANVAS_WIDTH, DIVIDING_LINE_HEIGHT);
 
-        // Translate down by 1 pixel, just like original
-        drawingCtx.translate(0, DIVIDING_LINE_HEIGHT)
+        // Translate down by dividing line height
+        drawingCtx.translate(0, DIVIDING_LINE_HEIGHT);
 
         // Calculate pages completed for overlap (same logic as scrollDown)
         let pagesCompleted = Math.max(0, Math.floor((documentOffset - initialUserScrollY - CANVAS_HEIGHT) / CANVAS_HEIGHT));
 
-        // Draw previous content - draw abs(delta) pixels, not abs(delta)-1
-        // This ensures we fully cover any old dividing lines from previous scrollDown operations
+        // Draw previous content with extra buffer to overlap and cover old dividing lines
         const sourceY = pagesCompleted > 0
             ? documentOffset - CANVAS_HEIGHT - pagesCompleted * NEXT_PAGE_DOC_SHIFT
             : documentOffset - CANVAS_HEIGHT;
 
         console.log('[Scroll] scrollUp:', {delta, documentOffset, pagesCompleted, sourceY});
 
-        await drawPageRegion(drawingCtx, 0, 0, CANVAS_WIDTH, Math.abs(delta), sourceY);
+        const overlapBuffer = DIVIDING_LINE_HEIGHT;
+        await drawPageRegion(drawingCtx, 0, -overlapBuffer, CANVAS_WIDTH, Math.abs(delta) + overlapBuffer, sourceY - overlapBuffer);
 
         drawingCtx.restore()
 
@@ -576,16 +598,144 @@
             scrollInterval
         )
     }
+    function eventHandlerTouchStart(event) {
+        event.preventDefault();
+        event.stopPropagation();
+
+        const touch = event.touches[0];
+        touchStartY = touch.clientY;
+        touchStartX = touch.clientX;
+        lastTouchY = touch.clientY;
+        touchStartTime = Date.now();
+        lastTouchTime = touchStartTime;
+        touchVelocity = 0;
+        hasMovedSignificantly = false;
+        wasPausedByTouch = false;
+
+        // Don't pause auto-scrolling immediately - wait to see if it's an upward scroll
+    }
+    function eventHandlerTouchMove(event) {
+        event.preventDefault();
+        event.stopPropagation();
+
+        const touch = event.touches[0];
+        const currentY = touch.clientY;
+        const currentX = touch.clientX;
+        const currentTime = Date.now();
+
+        // Check if touch has moved significantly
+        const totalDeltaY = Math.abs(currentY - touchStartY);
+        const totalDeltaX = Math.abs(currentX - touchStartX);
+
+        if (totalDeltaY > MOVEMENT_THRESHOLD || totalDeltaX > MOVEMENT_THRESHOLD) {
+            hasMovedSignificantly = true;
+        }
+
+        // Only do manual scrolling if moved significantly
+        if (hasMovedSignificantly) {
+            // Fixed direction: drag down = scroll down, drag up = scroll up
+            const deltaY = currentY - lastTouchY;
+
+            if (Math.abs(deltaY) > 0) {
+                if (deltaY > 0) {
+                    // Dragging down = scrolling down
+                    scrollDown(Math.abs(deltaY));
+                } else {
+                    // Dragging up = scrolling up
+                    // Only pause auto-scroll if scrolling up significantly
+                    if (Math.abs(deltaY) > SIGNIFICANT_UP_SCROLL && scrollDownInterval) {
+                        clearInterval(scrollDownInterval);
+                        scrollDownInterval = null;
+                        wasPausedByTouch = true;
+                    }
+                    scrollUp(deltaY);
+                }
+            }
+
+            // Calculate instantaneous velocity (pixels per millisecond)
+            const timeDelta = currentTime - lastTouchTime;
+            if (timeDelta > 0) {
+                // Use exponential moving average for smoother velocity
+                const instantVelocity = deltaY / timeDelta;
+                touchVelocity = touchVelocity * 0.7 + instantVelocity * 0.3;
+            }
+
+            lastTouchY = currentY;
+            lastTouchTime = currentTime;
+        }
+    }
+    function eventHandlerTouchEnd(event) {
+        event.preventDefault();
+        event.stopPropagation();
+
+        const touchDuration = Date.now() - touchStartTime;
+
+        // Determine what kind of touch interaction this was
+        if (!hasMovedSignificantly && touchDuration < TAP_THRESHOLD_MS) {
+            // Quick tap - toggle pause/resume
+            eventHandlerScrollPlayPause();
+        } else if (hasMovedSignificantly && Math.abs(touchVelocity) > 0.2) {
+            // Apply momentum scrolling based purely on final velocity
+            // Momentum is the "coasting" continuation after finger lifts
+            // The scrolling during the drag already happened in touchMove
+
+            const absVelocity = Math.abs(touchVelocity);
+            const velocitySign = touchVelocity >= 0 ? 1 : -1;
+
+            // Non-linear scaling: fast flicks scroll exponentially further
+            // velocity^1.8 means:
+            // - 2x faster flick = 3.5x more momentum
+            // - 3x faster flick = 7.2x more momentum
+            // - 4x faster flick = 13.9x more momentum
+            const momentumDistance = Math.pow(absVelocity, MOMENTUM_VELOCITY_POWER) * MOMENTUM_BASE_MULTIPLIER * velocitySign;
+
+            console.log('[Touch] Momentum:', {
+                touchVelocity: touchVelocity.toFixed(3),
+                momentumDistance: momentumDistance.toFixed(1),
+                pages: (Math.abs(momentumDistance) / CANVAS_HEIGHT).toFixed(2)
+            });
+
+            if (momentumDistance > 0) {
+                // Momentum scrolling down
+                scrollDown(Math.abs(momentumDistance));
+            } else if (momentumDistance < 0) {
+                // Momentum scrolling up
+                scrollUp(momentumDistance);
+            }
+        }
+        // If touch-and-hold with no movement and auto-scroll was active,
+        // it's already running (we didn't pause it)
+
+        // Reset tracking variables
+        touchStartY = 0;
+        touchStartX = 0;
+        lastTouchY = 0;
+        lastTouchTime = 0;
+        touchVelocity = 0;
+        hasMovedSignificantly = false;
+        wasPausedByTouch = false;
+    }
     function registerEventListeners() {
         canvas.addEventListener("click", eventHandlerScrollPlayPause)
         document.addEventListener("wheel", eventHandlerManualScroll, passiveSupported
             ? { passive: false } : false)
         document.addEventListener("keydown", eventHandlerToggleSpeed)
+        // Touch events for mobile devices
+        document.addEventListener("touchstart", eventHandlerTouchStart, passiveSupported
+            ? { passive: false } : false)
+        document.addEventListener("touchmove", eventHandlerTouchMove, passiveSupported
+            ? { passive: false } : false)
+        document.addEventListener("touchend", eventHandlerTouchEnd, passiveSupported
+            ? { passive: false } : false)
     }
     function deregisterEventListeners() {
         canvas.removeEventListener("click", eventHandlerScrollPlayPause)
         document.removeEventListener("wheel", eventHandlerManualScroll)
         document.removeEventListener("keydown", eventHandlerToggleSpeed)
+        // Touch events for mobile devices
+        document.removeEventListener("touchstart", eventHandlerTouchStart)
+        document.removeEventListener("touchmove", eventHandlerTouchMove)
+        document.removeEventListener("touchend", eventHandlerTouchEnd)
     }
     function startReading() {
         scrollDownInterval = setInterval(
