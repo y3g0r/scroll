@@ -28,6 +28,7 @@
     let speedMultiplier = 1 // 1 = normal speed, 3 = slow speed (for space key toggle)
     let isCapturing = false // Prevent concurrent captures
     let isBatchCapturing = false // Batch capture in progress
+    let dividingLineColor = '#000000' // Default to black, will be set based on page brightness
 
     // Convert time-per-screen to scroll interval based on screen height
     function calculateScrollInterval() {
@@ -372,6 +373,9 @@
             // Now draw initial viewport from cache starting at user's position
             await drawPageRegion(drawingCtx, 0, 0, CANVAS_WIDTH, CANVAS_HEIGHT, initialUserScrollY);
 
+            // Detect dividing line color once based on page brightness
+            dividingLineColor = detectDividingLineColor(drawingCtx, CANVAS_WIDTH, CANVAS_HEIGHT);
+
             documentOffset = initialUserScrollY + CANVAS_HEIGHT
 
             // Append canvas to page
@@ -465,6 +469,48 @@
         }
     }
 
+    /**
+     * Detect if the page background is light or dark
+     * Returns an appropriate contrasting color for the dividing line
+     * Should be called once when the reader is activated
+     */
+    function detectDividingLineColor(ctx, width, height) {
+        // Sample pixels from multiple areas of the canvas to get average brightness
+        const sampleHeight = Math.min(100, height); // Sample top 100px or less
+        const imageData = ctx.getImageData(0, 0, width, sampleHeight);
+        const pixels = imageData.data;
+
+        let totalBrightness = 0;
+        let sampleCount = 0;
+
+        // Sample every 10th pixel to improve performance
+        for (let i = 0; i < pixels.length; i += 40) { // RGBA = 4 bytes per pixel, sample every 10th pixel
+            const r = pixels[i];
+            const g = pixels[i + 1];
+            const b = pixels[i + 2];
+
+            // Calculate perceived brightness using standard luminance formula
+            // Human eyes are more sensitive to green, then red, then blue
+            const brightness = (0.299 * r + 0.587 * g + 0.114 * b);
+            totalBrightness += brightness;
+            sampleCount++;
+        }
+
+        const avgBrightness = totalBrightness / sampleCount;
+
+        console.log('[Scroll] Detected average brightness:', avgBrightness.toFixed(1));
+
+        // If background is bright (> 128), use black dividing line
+        // If background is dark (<= 128), use warm yellow dividing line
+        if (avgBrightness > 128) {
+            console.log('[Scroll] Using black dividing line for bright background');
+            return '#000000'; // Black for bright backgrounds
+        } else {
+            console.log('[Scroll] Using warm yellow dividing line for dark background');
+            return '#FFD580'; // Warm yellow for dark backgrounds
+        }
+    }
+
     async function scrollDown(delta = DEFAULT_DELTA) {
         if (isCapturing || isBatchCapturing) {
             return; // Skip if capturing
@@ -495,7 +541,7 @@
         await drawPageRegion(drawingCtx, 0, -overlapBuffer, CANVAS_WIDTH, delta + overlapBuffer, sourceY - overlapBuffer);
 
         // Draw dividing line AFTER the content (at position delta)
-        drawingCtx.fillStyle = '#000000';
+        drawingCtx.fillStyle = dividingLineColor;
         drawingCtx.fillRect(0, delta, CANVAS_WIDTH, DIVIDING_LINE_HEIGHT);
 
         documentOffset += delta
@@ -529,7 +575,7 @@
         drawingCtx.translate(0, canvasOffset)
 
         // Draw dividing line first
-        drawingCtx.fillStyle = '#000000';
+        drawingCtx.fillStyle = dividingLineColor;
         drawingCtx.fillRect(0, 0, CANVAS_WIDTH, DIVIDING_LINE_HEIGHT);
 
         // Translate down by dividing line height
