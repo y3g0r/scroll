@@ -82,9 +82,13 @@
     let lastTouchY = 0;
     let lastTouchTime = 0;
     let touchVelocity = 0; // pixels per millisecond
-    let wasPausedByTouch = false; // Track if we paused due to touch-and-hold
+    let wasPausedByTouch = false; // Track if we paused due to upward scrolling
     let hasMovedSignificantly = false; // Track if touch has moved enough to be a drag
+    let holdPauseTimer = null; // Timer to detect hold gesture
+    let pausedDueToHold = false; // Track if we paused due to hold-to-pause feature
+    let wasAutoScrollingOnTouchStart = false; // Track if auto-scrolling was active when touch started
     const TAP_THRESHOLD_MS = 200; // Max duration for a tap
+    const HOLD_DETECTION_MS = 150; // Time before considering it a hold gesture
     const MOVEMENT_THRESHOLD = 10; // Min pixels to consider it a drag
     const SIGNIFICANT_UP_SCROLL = 3; // Threshold for pausing auto-scroll on up gesture
     // Momentum calculation parameters
@@ -611,8 +615,27 @@
         touchVelocity = 0;
         hasMovedSignificantly = false;
         wasPausedByTouch = false;
+        pausedDueToHold = false;
 
-        // Don't pause auto-scrolling immediately - wait to see if it's an upward scroll
+        // Record if auto-scrolling is currently active
+        wasAutoScrollingOnTouchStart = scrollDownInterval !== null;
+
+        // Start timer to detect hold gesture
+        // If touch doesn't move significantly within HOLD_DETECTION_MS, pause auto-scrolling
+        if (holdPauseTimer) {
+            clearTimeout(holdPauseTimer);
+        }
+        holdPauseTimer = setTimeout(() => {
+            // Timer fired - check if it's still a hold (no significant movement)
+            if (!hasMovedSignificantly && wasAutoScrollingOnTouchStart && scrollDownInterval !== null) {
+                // It's a hold gesture and auto-scrolling is active - pause it
+                clearInterval(scrollDownInterval);
+                scrollDownInterval = null;
+                pausedDueToHold = true;
+                console.log('[Touch] Hold detected - pausing auto-scroll');
+            }
+            holdPauseTimer = null;
+        }, HOLD_DETECTION_MS);
     }
     function eventHandlerTouchMove(event) {
         event.preventDefault();
@@ -628,7 +651,20 @@
         const totalDeltaX = Math.abs(currentX - touchStartX);
 
         if (totalDeltaY > MOVEMENT_THRESHOLD || totalDeltaX > MOVEMENT_THRESHOLD) {
-            hasMovedSignificantly = true;
+            if (!hasMovedSignificantly) {
+                // Just became a drag gesture - cancel hold detection
+                hasMovedSignificantly = true;
+                if (holdPauseTimer) {
+                    clearTimeout(holdPauseTimer);
+                    holdPauseTimer = null;
+                }
+                // If we had paused due to hold, resume auto-scrolling for the drag
+                if (pausedDueToHold && wasAutoScrollingOnTouchStart) {
+                    scrollDownInterval = setInterval(scrollDown, scrollInterval);
+                    pausedDueToHold = false;
+                    console.log('[Touch] Drag detected - resuming auto-scroll');
+                }
+            }
         }
 
         // Only do manual scrolling if moved significantly
@@ -670,10 +706,25 @@
 
         const touchDuration = Date.now() - touchStartTime;
 
+        // Cancel hold timer if still running
+        if (holdPauseTimer) {
+            clearTimeout(holdPauseTimer);
+            holdPauseTimer = null;
+        }
+
         // Determine what kind of touch interaction this was
         if (!hasMovedSignificantly && touchDuration < TAP_THRESHOLD_MS) {
-            // Quick tap - toggle pause/resume
+            // Quick tap - toggle pause/resume (permanent)
             eventHandlerScrollPlayPause();
+            pausedDueToHold = false; // Clear the flag since we toggled manually
+        } else if (pausedDueToHold && !hasMovedSignificantly) {
+            // Hold and release without dragging - unpause auto-scrolling
+            // This only happens if auto-scrolling was active when touch started
+            if (scrollDownInterval === null) {
+                scrollDownInterval = setInterval(scrollDown, scrollInterval);
+                console.log('[Touch] Hold released - resuming auto-scroll');
+            }
+            pausedDueToHold = false;
         } else if (hasMovedSignificantly && Math.abs(touchVelocity) > 0.2) {
             // Apply momentum scrolling based purely on final velocity
             // Momentum is the "coasting" continuation after finger lifts
@@ -703,8 +754,6 @@
                 scrollUp(momentumDistance);
             }
         }
-        // If touch-and-hold with no movement and auto-scroll was active,
-        // it's already running (we didn't pause it)
 
         // Reset tracking variables
         touchStartY = 0;
@@ -714,6 +763,34 @@
         touchVelocity = 0;
         hasMovedSignificantly = false;
         wasPausedByTouch = false;
+        pausedDueToHold = false;
+        wasAutoScrollingOnTouchStart = false;
+    }
+    function eventHandlerTouchCancel(event) {
+        // Touch was cancelled by the system - clean up
+        if (holdPauseTimer) {
+            clearTimeout(holdPauseTimer);
+            holdPauseTimer = null;
+        }
+
+        // If we paused due to hold, resume auto-scrolling
+        if (pausedDueToHold && wasAutoScrollingOnTouchStart) {
+            if (scrollDownInterval === null) {
+                scrollDownInterval = setInterval(scrollDown, scrollInterval);
+                console.log('[Touch] Touch cancelled - resuming auto-scroll');
+            }
+        }
+
+        // Reset tracking variables
+        touchStartY = 0;
+        touchStartX = 0;
+        lastTouchY = 0;
+        lastTouchTime = 0;
+        touchVelocity = 0;
+        hasMovedSignificantly = false;
+        wasPausedByTouch = false;
+        pausedDueToHold = false;
+        wasAutoScrollingOnTouchStart = false;
     }
     function registerEventListeners() {
         canvas.addEventListener("click", eventHandlerScrollPlayPause)
@@ -727,6 +804,8 @@
             ? { passive: false } : false)
         document.addEventListener("touchend", eventHandlerTouchEnd, passiveSupported
             ? { passive: false } : false)
+        document.addEventListener("touchcancel", eventHandlerTouchCancel, passiveSupported
+            ? { passive: false } : false)
     }
     function deregisterEventListeners() {
         canvas.removeEventListener("click", eventHandlerScrollPlayPause)
@@ -736,6 +815,12 @@
         document.removeEventListener("touchstart", eventHandlerTouchStart)
         document.removeEventListener("touchmove", eventHandlerTouchMove)
         document.removeEventListener("touchend", eventHandlerTouchEnd)
+        document.removeEventListener("touchcancel", eventHandlerTouchCancel)
+        // Clean up hold timer if active
+        if (holdPauseTimer) {
+            clearTimeout(holdPauseTimer);
+            holdPauseTimer = null;
+        }
     }
     function startReading() {
         scrollDownInterval = setInterval(
