@@ -584,15 +584,15 @@
         // Calculate pages completed for overlap (same logic as scrollDown)
         let pagesCompleted = Math.max(0, Math.floor((documentOffset - initialUserScrollY - CANVAS_HEIGHT) / CANVAS_HEIGHT));
 
-        // Draw previous content with extra buffer to overlap and cover old dividing lines
+        // Draw previous content starting right after the dividing line (no overlap that would cover the line)
         const sourceY = pagesCompleted > 0
             ? documentOffset - CANVAS_HEIGHT - pagesCompleted * NEXT_PAGE_DOC_SHIFT
             : documentOffset - CANVAS_HEIGHT;
 
         console.log('[Scroll] scrollUp:', {delta, documentOffset, pagesCompleted, sourceY});
 
-        const overlapBuffer = DIVIDING_LINE_HEIGHT;
-        await drawPageRegion(drawingCtx, 0, -overlapBuffer, CANVAS_WIDTH, Math.abs(delta) + overlapBuffer, sourceY - overlapBuffer);
+        // Draw content starting at position 0 (after translate, this is right after the dividing line)
+        await drawPageRegion(drawingCtx, 0, 0, CANVAS_WIDTH, Math.abs(delta), sourceY);
 
         drawingCtx.restore()
 
