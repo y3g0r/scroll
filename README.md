@@ -110,6 +110,9 @@ Original extension created for Firefox. Updated for cross-browser compatibility.
 
 ## Changelog
 
+### v.0.3
+- Same as v0.2, just want to upload clean artifact to AMO (previous included some unnecessary files in it)
+
 ### v0.2 (2025)
 - Migrated to Manifest V3
 - Added cross-browser support (Chrome, Edge, Brave, Opera)

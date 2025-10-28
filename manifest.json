@@ -1,6 +1,6 @@
 {
     "manifest_version": 3,
-    "version": "0.2",
+    "version": "0.3",
     "name": "Scroll",
     "description": "An automatic scrolling reader for comfortable reading of long web pages",
     "browser_specific_settings": {
