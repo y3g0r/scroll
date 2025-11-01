@@ -934,6 +934,16 @@
 
             sendResponse({success: true});
             return true;
+        } else if (message.command === "getStatus") {
+            // Return the actual current state from the content script
+            // This is the single source of truth for the reader state
+            const status = {
+                isActive: canvas !== null,
+                isCapturing: isCapturing || isBatchCapturing,
+                captureProgress: '' // Progress is only relevant during initial capture
+            };
+            sendResponse(status);
+            return true;
         }
     })
 

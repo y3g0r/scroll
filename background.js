@@ -127,7 +127,26 @@ async function getTabStatus(tabId) {
             tabId = tabs[0].id;
         }
     }
-    return tabStatus.get(tabId) || { isActive: false, isCapturing: false, captureProgress: '' };
+
+    // Try to get the actual state from the content script (single source of truth)
+    try {
+        const actualState = await browserAPI.tabs.sendMessage(tabId, {
+            command: "getStatus"
+        });
+
+        // Use actual state from content script, but preserve captureProgress from stored state
+        // (captureProgress is updated frequently via updateStatus messages during capture)
+        const storedState = tabStatus.get(tabId) || {};
+        return {
+            isActive: actualState.isActive,
+            isCapturing: actualState.isCapturing,
+            captureProgress: storedState.captureProgress || actualState.captureProgress || ''
+        };
+    } catch (error) {
+        // Content script not available - fall back to stored state or default
+        console.log('Content script not available for status query, using stored state');
+        return tabStatus.get(tabId) || { isActive: false, isCapturing: false, captureProgress: '' };
+    }
 }
 
 // Handle messages from content script and popup
