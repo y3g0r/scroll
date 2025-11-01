@@ -636,17 +636,18 @@
             // do nothing if not scrolling
             return
         }
-        event.preventDefault()
+        // Only handle space key - let other keys (like keyboard shortcuts) pass through
         if (event.key === " ") {
+            event.preventDefault()
             // Toggle between normal and 3x slower
             speedMultiplier = (speedMultiplier === 1) ? 3 : 1;
             scrollInterval = calculateScrollInterval();
+            clearInterval(scrollDownInterval)
+            scrollDownInterval = setInterval(
+                scrollDown,
+                scrollInterval
+            )
         }
-        clearInterval(scrollDownInterval)
-        scrollDownInterval = setInterval(
-            scrollDown,
-            scrollInterval
-        )
     }
     function eventHandlerTouchStart(event) {
         event.preventDefault();

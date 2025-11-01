@@ -219,13 +219,19 @@ browserAPI.runtime.onMessage.addListener((message, sender, sendResponse) => {
 // If you need direct icon click without popup, remove "default_popup" from manifest.json
 
 // Listen for keyboard shortcut command
-browserAPI.commands.onCommand.addListener((command) => {
+browserAPI.commands.onCommand.addListener(async (command) => {
     if (command === 'toggle-reader') {
-        // Get the active tab and toggle reader
-        browserAPI.tabs.query({active: true, currentWindow: true}).then(tabs => {
+        try {
+            // Get the active tab and toggle reader
+            const tabs = await browserAPI.tabs.query({active: true, currentWindow: true});
             if (tabs[0]) {
-                toggleReader(tabs[0].id);
+                const response = await toggleReader(tabs[0].id);
+                if (!response || !response.success) {
+                    console.error('Toggle reader failed:', response?.error || 'Unknown error');
+                }
             }
-        });
+        } catch (error) {
+            console.error('Error executing toggle-reader command:', error);
+        }
     }
 });
