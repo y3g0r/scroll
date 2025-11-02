@@ -23,6 +23,8 @@
     let drawingCtx = null
     let readStartYOffset = 0
     let initialUserScrollY = 0  // User's scroll position when extension was activated
+    let capturedDocumentHeight = 0  // Height of the captured document portion
+    let cachedContentStartY = 0  // Y position where cached content actually starts (persists across activations)
     let scrollInterval = NORMAL_SCROLL_INTERVAL
     let timePerScreen = 30 // Default: 30 seconds per screen
     let speedMultiplier = 1 // 1 = normal speed, 3 = slow speed (for space key toggle)
@@ -470,8 +472,8 @@
 
             // Save user's current position for initial viewing
             initialUserScrollY = window.scrollY
-            // Always capture entire document from top
-            readStartYOffset = 0
+            // Capture document starting from current scroll position
+            readStartYOffset = initialUserScrollY
 
             console.log('[Scroll] Initial state:', {
                 readStartYOffset,
@@ -481,17 +483,29 @@
             });
 
             // Check if we can reuse existing cache
-            // Cache is valid only if dimensions haven't changed
+            // Cache is valid only if dimensions haven't changed AND
+            // current position is not earlier than cached content start
             const dimensionsChanged = cachedDimensions.width !== CANVAS_WIDTH ||
                                      cachedDimensions.height !== CANVAS_HEIGHT;
+            const activatedBeforeCachedStart = capturedScreensCache.size > 0 &&
+                                              initialUserScrollY < cachedContentStartY;
             const canReuseCache = !forceRecapture &&
                                  capturedScreensCache.size > 0 &&
-                                 !dimensionsChanged;
+                                 !dimensionsChanged &&
+                                 !activatedBeforeCachedStart;
 
             if (dimensionsChanged && capturedScreensCache.size > 0) {
                 console.log('[Scroll] Window dimensions changed - invalidating cache', {
                     old: cachedDimensions,
                     new: { width: CANVAS_WIDTH, height: CANVAS_HEIGHT }
+                });
+                capturedScreensCache.clear();
+            }
+
+            if (activatedBeforeCachedStart) {
+                console.log('[Scroll] Activated before cached start - invalidating cache', {
+                    cachedContentStartY,
+                    initialUserScrollY
                 });
                 capturedScreensCache.clear();
             }
@@ -515,14 +529,14 @@
 
                 // Calculate how many screens to pre-capture
                 // Capture the entire document
-                const documentHeight = Math.max(
+                capturedDocumentHeight = Math.max(
                     document.body.scrollHeight,
                     document.documentElement.scrollHeight
                 );
-                const maxScreensToCapture = Math.ceil((documentHeight - readStartYOffset) / CANVAS_HEIGHT);
+                const maxScreensToCapture = Math.ceil((capturedDocumentHeight - readStartYOffset) / CANVAS_HEIGHT);
 
                 console.log('[Scroll] Pre-capturing all content...', {
-                    documentHeight,
+                    documentHeight: capturedDocumentHeight,
                     screensToCapture: maxScreensToCapture
                 });
 
@@ -582,6 +596,9 @@
                 // Store dimensions used for this cache
                 cachedDimensions.width = CANVAS_WIDTH;
                 cachedDimensions.height = CANVAS_HEIGHT;
+
+                // Store where this cached content starts
+                cachedContentStartY = readStartYOffset;
             }
 
             // Now draw initial viewport from cache starting at user's position
@@ -741,6 +758,14 @@
             return; // Skip if capturing
         }
 
+        // Check boundary - prevent scrolling beyond captured document
+        if (documentOffset + delta > capturedDocumentHeight) {
+            delta = Math.max(0, capturedDocumentHeight - documentOffset);
+            if (delta <= 0) {
+                return; // Already at the end
+            }
+        }
+
         let carryover = 0
         let spaceLeft = CANVAS_HEIGHT - canvasOffset
         if (delta > spaceLeft) {
@@ -786,6 +811,15 @@
     async function scrollUp(delta) {
         if (isCapturing) {
             return; // Skip if already capturing
+        }
+
+        // Check boundary - prevent scrolling above where cached content starts
+        const minDocumentOffset = cachedContentStartY + CANVAS_HEIGHT;
+        if (documentOffset + delta < minDocumentOffset) {
+            delta = minDocumentOffset - documentOffset;
+            if (delta >= 0) {
+                return; // Already at the start
+            }
         }
 
         let carryover = 0
