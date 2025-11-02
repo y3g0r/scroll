@@ -30,6 +30,12 @@
     let isBatchCapturing = false // Batch capture in progress
     let dividingLineColor = '#000000' // Default to black, will be set based on page brightness
 
+    // FAB (Floating Action Button) for toggling reader
+    let fab = null
+    let fabPosition = { x: window.innerWidth - 70, y: window.innerHeight - 80 } // Default position: bottom-right
+    let isDraggingFab = false
+    let fabDragOffset = { x: 0, y: 0 }
+
     // Convert time-per-screen to scroll interval based on screen height
     function calculateScrollInterval() {
         const screenHeight = CANVAS_HEIGHT || window.innerHeight || 800;
@@ -49,6 +55,15 @@
         }
     }).catch((error) => {
         console.error('Failed to load scroll speed:', error);
+    });
+
+    // Load saved FAB position from storage
+    browserAPI.storage.sync.get(['fabPosition']).then((result) => {
+        if (result.fabPosition) {
+            fabPosition = result.fabPosition;
+        }
+    }).catch((error) => {
+        console.error('Failed to load FAB position:', error);
     });
 
     // Performance optimization: cache captured screens
@@ -118,10 +133,14 @@
             // Save current scroll position (only if not batch capturing)
             const currentScrollY = window.scrollY;
 
-            // Hide canvas before capturing to avoid capturing it (only once for batch)
+            // Hide canvas and FAB before capturing to avoid capturing them (only once for batch)
             const wasVisible = canvas && canvas.style.display !== 'none';
+            const fabWasVisible = fab && fab.style.display !== 'none';
             if (canvas && !isBatchCapturing) {
                 canvas.style.display = 'none';
+            }
+            if (fab && !isBatchCapturing) {
+                fab.style.display = 'none';
             }
 
             // Scroll to the target position to capture
@@ -173,9 +192,12 @@
 
             // Only restore if not in batch mode or if explicitly requested
             if (!skipRestore) {
-                // Show canvas again
+                // Show canvas and FAB again
                 if (canvas && wasVisible && !isBatchCapturing) {
                     canvas.style.display = 'block';
+                }
+                if (fab && fabWasVisible && !isBatchCapturing) {
+                    fab.style.display = 'flex';
                 }
 
                 // Restore scroll position
@@ -235,6 +257,189 @@
             const remainingHeight = height - availableHeight;
             await drawPageRegion(ctx, destX, destY + availableHeight, width, remainingHeight, screenY + CANVAS_HEIGHT);
         }
+    }
+
+    /**
+     * Create and show the FAB (Floating Action Button)
+     */
+    function createFAB() {
+        if (fab) return; // Already exists
+
+        fab = document.createElement('div');
+        fab.id = 'scroll-reader-fab';
+        fab.innerHTML = '▶'; // Play symbol
+
+        // Style the FAB
+        fab.style.position = 'fixed';
+        fab.style.width = '50px';
+        fab.style.height = '50px';
+        fab.style.borderRadius = '50%';
+        fab.style.backgroundColor = 'rgba(100, 100, 100, 0.3)'; // Barely visible
+        fab.style.color = 'rgba(255, 255, 255, 0.8)';
+        fab.style.display = 'flex';
+        fab.style.alignItems = 'center';
+        fab.style.justifyContent = 'center';
+        fab.style.fontSize = '24px';
+        fab.style.cursor = 'grab';
+        fab.style.userSelect = 'none';
+        fab.style.zIndex = '2147483647'; // Same as or higher than canvas to stay on top
+        fab.style.transition = 'background-color 0.2s, opacity 0.2s';
+        fab.style.touchAction = 'none'; // Prevent default touch behavior
+        fab.style.boxSizing = 'border-box'; // Ensure consistent sizing
+        fab.style.lineHeight = '1'; // Reset line-height for better vertical centering
+        fab.style.textAlign = 'center'; // Ensure text alignment
+        fab.style.padding = '0'; // Remove any default padding
+        fab.style.margin = '0'; // Remove any default margin
+
+        // Position the FAB
+        fab.style.left = fabPosition.x + 'px';
+        fab.style.top = fabPosition.y + 'px';
+
+        // Add hover effect for better visibility
+        fab.addEventListener('mouseenter', () => {
+            if (!isDraggingFab) {
+                fab.style.backgroundColor = 'rgba(100, 100, 100, 0.6)';
+            }
+        });
+        fab.addEventListener('mouseleave', () => {
+            if (!isDraggingFab) {
+                fab.style.backgroundColor = 'rgba(100, 100, 100, 0.3)';
+            }
+        });
+
+        // Add drag and click functionality
+        fab.addEventListener('mousedown', fabMouseDown);
+        fab.addEventListener('touchstart', fabTouchStart, { passive: false });
+
+        document.body.appendChild(fab);
+        console.log('[FAB] Created at position:', fabPosition);
+    }
+
+    /**
+     * Remove the FAB
+     */
+    function removeFAB() {
+        if (fab) {
+            fab.removeEventListener('mousedown', fabMouseDown);
+            fab.removeEventListener('touchstart', fabTouchStart);
+            fab.remove();
+            fab = null;
+            console.log('[FAB] Removed');
+        }
+    }
+
+    /**
+     * Save FAB position to storage
+     */
+    function saveFabPosition() {
+        browserAPI.storage.sync.set({ fabPosition }).catch((error) => {
+            console.error('Failed to save FAB position:', error);
+        });
+    }
+
+    /**
+     * Handle FAB mouse down (start drag or prepare for click)
+     */
+    function fabMouseDown(e) {
+        e.preventDefault();
+        e.stopPropagation();
+
+        // Set flag immediately to prevent scroll events during potential drag
+        isDraggingFab = true;
+
+        const startX = e.clientX;
+        const startY = e.clientY;
+        const startPosX = fabPosition.x;
+        const startPosY = fabPosition.y;
+        let hasMoved = false;
+
+        function onMouseMove(e) {
+            hasMoved = true;
+            fab.style.cursor = 'grabbing';
+
+            fabPosition.x = startPosX + (e.clientX - startX);
+            fabPosition.y = startPosY + (e.clientY - startY);
+
+            // Keep FAB within viewport bounds
+            fabPosition.x = Math.max(0, Math.min(window.innerWidth - 50, fabPosition.x));
+            fabPosition.y = Math.max(0, Math.min(window.innerHeight - 50, fabPosition.y));
+
+            fab.style.left = fabPosition.x + 'px';
+            fab.style.top = fabPosition.y + 'px';
+        }
+
+        function onMouseUp(e) {
+            document.removeEventListener('mousemove', onMouseMove);
+            document.removeEventListener('mouseup', onMouseUp);
+
+            if (hasMoved) {
+                // Save position after drag
+                saveFabPosition();
+                isDraggingFab = false;
+                fab.style.cursor = 'grab';
+                fab.style.backgroundColor = 'rgba(100, 100, 100, 0.3)';
+            } else {
+                // Click - toggle reader
+                isDraggingFab = false;
+                toggleReader();
+            }
+        }
+
+        document.addEventListener('mousemove', onMouseMove);
+        document.addEventListener('mouseup', onMouseUp);
+    }
+
+    /**
+     * Handle FAB touch start (for mobile)
+     */
+    function fabTouchStart(e) {
+        e.preventDefault();
+        e.stopPropagation();
+
+        // Set flag immediately to prevent scroll events during potential drag
+        isDraggingFab = true;
+
+        const touch = e.touches[0];
+        const startX = touch.clientX;
+        const startY = touch.clientY;
+        const startPosX = fabPosition.x;
+        const startPosY = fabPosition.y;
+        let hasMoved = false;
+
+        function onTouchMove(e) {
+            e.preventDefault();
+            const touch = e.touches[0];
+            hasMoved = true;
+
+            fabPosition.x = startPosX + (touch.clientX - startX);
+            fabPosition.y = startPosY + (touch.clientY - startY);
+
+            // Keep FAB within viewport bounds
+            fabPosition.x = Math.max(0, Math.min(window.innerWidth - 50, fabPosition.x));
+            fabPosition.y = Math.max(0, Math.min(window.innerHeight - 50, fabPosition.y));
+
+            fab.style.left = fabPosition.x + 'px';
+            fab.style.top = fabPosition.y + 'px';
+        }
+
+        function onTouchEnd(e) {
+            e.preventDefault();
+            document.removeEventListener('touchmove', onTouchMove);
+            document.removeEventListener('touchend', onTouchEnd);
+
+            if (hasMoved) {
+                // Save position after drag
+                saveFabPosition();
+                isDraggingFab = false;
+            } else {
+                // Tap - toggle reader
+                isDraggingFab = false;
+                toggleReader();
+            }
+        }
+
+        document.addEventListener('touchmove', onTouchMove, { passive: false });
+        document.addEventListener('touchend', onTouchEnd, { passive: false });
     }
 
     async function toggleReader(forceRecapture = false) {
@@ -331,6 +536,10 @@
 
                 // Capture all screens upfront
                 isBatchCapturing = true;
+                // Hide FAB during batch capture
+                if (fab) {
+                    fab.style.display = 'none';
+                }
                 for (let i = 0; i < maxScreensToCapture; i++) {
                     const targetY = readStartYOffset + CANVAS_HEIGHT * i;
                     await captureScreen(targetY, true); // Skip individual restores
@@ -361,6 +570,11 @@
                 // Restore to user's initial position
                 window.scrollTo({top: initialUserScrollY, left: 0, behavior: 'instant'});
 
+                // Show FAB again after batch capture
+                if (fab) {
+                    fab.style.display = 'flex';
+                }
+
                 console.log('[Scroll] Pre-capture complete!', {
                     screensCached: capturedScreensCache.size
                 });
@@ -383,6 +597,11 @@
 
             // Ensure canvas is visible
             canvas.style.display = 'block'
+
+            // Re-append FAB to ensure it stays on top of canvas
+            if (fab && fab.parentElement) {
+                document.body.appendChild(fab);
+            }
 
             console.log('[Scroll] After canvas append:', {
                 canvasPosition: canvas.style.position,
@@ -440,9 +659,12 @@
             isBatchCapturing = true;
             const savedScrollY = window.scrollY;
 
-            // Hide canvas once for entire batch
+            // Hide canvas and FAB once for entire batch
             if (canvas) {
                 canvas.style.display = 'none';
+            }
+            if (fab) {
+                fab.style.display = 'none';
             }
 
             // Batch-capture next screens without restoring between each
@@ -453,10 +675,13 @@
                 }
             }
 
-            // Restore scroll and show canvas once after all captures
+            // Restore scroll and show canvas and FAB once after all captures
             window.scrollTo({top: savedScrollY, left: 0, behavior: 'instant'});
             if (canvas) {
                 canvas.style.display = 'block';
+            }
+            if (fab) {
+                fab.style.display = 'flex';
             }
 
             isBatchCapturing = false;
@@ -614,6 +839,11 @@
         }
     }
     function eventHandlerManualScroll(event) {
+        // Skip if dragging FAB
+        if (isDraggingFab) {
+            return;
+        }
+
         // Always prevent default to keep scrolling within canvas
         // This event listener is only active when canvas is visible
         event.preventDefault()
@@ -650,6 +880,11 @@
         }
     }
     function eventHandlerTouchStart(event) {
+        // Skip if dragging FAB
+        if (isDraggingFab) {
+            return;
+        }
+
         event.preventDefault();
         event.stopPropagation();
 
@@ -685,6 +920,11 @@
         }, HOLD_DETECTION_MS);
     }
     function eventHandlerTouchMove(event) {
+        // Skip if dragging FAB
+        if (isDraggingFab) {
+            return;
+        }
+
         event.preventDefault();
         event.stopPropagation();
 
@@ -748,6 +988,11 @@
         }
     }
     function eventHandlerTouchEnd(event) {
+        // Skip if dragging FAB
+        if (isDraggingFab) {
+            return;
+        }
+
         event.preventDefault();
         event.stopPropagation();
 
@@ -947,5 +1192,8 @@
             return true;
         }
     })
+
+    // Create FAB on page load - it's always visible except during capture
+    createFAB();
 
 })();
